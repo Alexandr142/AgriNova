@@ -1,6 +1,7 @@
 """Run with: uv run streamlit run src/agri_nova/app.py"""
 from datetime import date
 
+import pandas as pd
 import plotly.express as px
 import folium
 import streamlit as st
@@ -17,6 +18,28 @@ SIGNAL_LABELS = {
     "limited": ("info", "Limited signal in this period"),
     "insufficient_data": ("warning", "Not enough data in this period"),
 }
+
+CROP_PROFILES = {
+    "Corn": {
+        "critical_start": "07-15",
+        "critical_end": "08-10",
+        "heat_threshold": 35.0,
+        "phase_name": "Pollination"
+    },
+    "Soybean": {
+        "critical_start": "08-01",
+        "critical_end": "08-25",
+        "heat_threshold": 32.0,
+        "phase_name": "Pod Set"
+    },
+    "Winter Wheat": {
+        "critical_start": "05-15",
+        "critical_end": "06-15",
+        "heat_threshold": 30.0,
+        "phase_name": "Flowering & Grain Fill"
+    }
+}
+
 
 st.set_page_config(page_title="Agri Nova", page_icon="🌾", layout="wide")
 st.title("🌾 Agri Nova: The Flash Drought Pivot")
@@ -39,7 +62,7 @@ with st.sidebar:
     ).add_to(m)
 
     # Display map in sidebar and get coords
-    map_data = st_folium(m, height=300, use_container_width=True)
+    map_data = st_folium(m, height=300, width="content")
 
     # Handle coords from map
     if map_data.get("last_clicked"):
@@ -50,7 +73,9 @@ with st.sidebar:
 
     st.success(f"Coordinates: {lat:.4f}, {lon:.4f}")
 
-    # Demo dates
+    selected_crop = st.selectbox("Current Target Crop", list(CROP_PROFILES.keys()))
+
+    # Demo dates for drought in Iowa 2017
     start = st.date_input("Start date", value=date(2017, 4, 1))
     end = st.date_input("End date", value=date(2017, 11, 15))
 
@@ -98,10 +123,33 @@ def render_assessment(a: StrategyAssessment) -> None:
     st.caption("General-knowledge ratings, not calibrated for Spink County.")
 
 
+def plot_vulnerability_window(df, profile):
+    """Plots temperature with critical crop phase highlighting."""
+    fig = px.line(df, y=["T2M_MAX", "T2M_MIN"], title=f"Temperature Stress: {profile['phase_name']}")
+    if df.empty:
+        return fig
+
+    target_year = df.index.year.value_counts().idxmax()
+    start_window = f"{target_year}-{profile['critical_start']}"
+    end_window = f"{target_year}-{profile['critical_end']}"
+
+    fig.add_vrect(
+        x0=start_window, x1=end_window, fillcolor="red", opacity=0.15, layer="below", line_width=0,
+        annotation_text="Critical Phase", annotation_position="top left"
+    )
+    fig.add_hline(
+        y=profile["heat_threshold"], line_dash="dot", line_color="red",
+        annotation_text=f"Heat Limit ({profile['heat_threshold']}°C)"
+    )
+    return fig
+
+
 c1, c2, c3 = st.columns(3)
 c1.metric("Water-stress days", int(df["water_stress"].sum()))
 c2.metric("Heat-stress days", int(df["heat_stress"].sum()))
 c3.metric("Disease risk (last 7d)", f"{df['disease_risk_7d'].iloc[-1]:.0%}")
+
+st.plotly_chart(plot_vulnerability_window(df, CROP_PROFILES[selected_crop]), width="content")
 
 st.header("Rotation options")
 st.info(DISCLAIMER)
@@ -114,14 +162,14 @@ for tab, assessment in zip(tabs, assessments, strict=True):
 
 st.header("Climate context")
 st.plotly_chart(
-    px.bar(df, y="PRECTOTCORR", title="Daily precipitation (mm)"), use_container_width=True
+    px.bar(df, y="PRECTOTCORR", title="Daily precipitation (mm)"), width="content"
 )
 st.plotly_chart(
     px.line(df, y="GWETROOT", title="Root-zone soil wetness (0 dry, 1 saturated)"),
-    use_container_width=True,
+    width="content",
 )
 st.plotly_chart(
-    px.line(df, y=["T2M_MAX", "T2M_MIN"], title="Temperature (C)"), use_container_width=True
+    px.line(df, y=["T2M_MAX", "T2M_MIN"], title="Temperature (C)"), width="content"
 )
 
 with st.expander("Raw data"):

@@ -1,5 +1,6 @@
+"""Settings for data fetching such as logins, passwords etc."""
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from xarray.backends import lru_cache
 
 
 class DataSettings(BaseSettings):

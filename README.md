@@ -1,4 +1,4 @@
-# 🌾 Field Shift: The "Flash Drought" Pivot
+# 🌾 Agri Nova: The "Flash Drought" Pivot
 
 **NASA Space Apps Challenge 2026** | **Challenge:** [Field Shift: Adapting Farms with NASA Data]
 

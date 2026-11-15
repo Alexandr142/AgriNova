@@ -1,7 +1,7 @@
 """NASA POWER client: daily weather, solar and soil-wetness data for any lat/lon.
 
-Docs: https://power.larc.nasa.gov/docs/services/api/
-No API key required, which makes it ideal for a hackathon baseline.
+Docs: https://power.larc.nasa.gov/docs  /services/api/
+API Key not required
 """
 from __future__ import annotations
 
@@ -43,6 +43,7 @@ def fetch_daily(
         "start": start.strftime("%Y%m%d"),
         "end": end.strftime("%Y%m%d"),
         "format": "JSON",
+        "time-standard": "UTC"
     }
     resp = httpx.get(BASE_URL, params=params, timeout=60)
     resp.raise_for_status()

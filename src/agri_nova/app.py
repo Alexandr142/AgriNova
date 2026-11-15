@@ -2,7 +2,9 @@
 from datetime import date
 
 import plotly.express as px
+import folium
 import streamlit as st
+from streamlit_folium import st_folium
 
 from agri_nova.data.power import fetch_daily
 from agri_nova.indicators import add_indicators
@@ -16,15 +18,39 @@ SIGNAL_LABELS = {
     "insufficient_data": ("warning", "Not enough data in this period"),
 }
 
-st.set_page_config(page_title="Field Shift", page_icon="🌾", layout="wide")
-st.title("🌾 Field Shift: The Flash Drought Pivot")
+st.set_page_config(page_title="Agri Nova", page_icon="🌾", layout="wide")
+st.title("🌾 Agri Nova: The Flash Drought Pivot")
 st.caption("Built on NASA POWER data so far. Prototype heuristics, not agronomic advice.")
 
 with st.sidebar:
-    st.header("Field")
-    st.caption("Defaults: approximate Spink County, SD, 2017 growing season.")
-    lat = st.number_input("Latitude", value=44.93, format="%.4f")
-    lon = st.number_input("Longitude", value=-98.40, format="%.4f")
+    st.header("📍 Choose field")
+    st.caption("Click on map to update location")
+
+    # Make map and center about USA Midwest
+    m = folium.Map(location=[41.5000, -93.5000], zoom_start=5)
+
+    # Add satellite layer from Esri data
+    folium.TileLayer(
+        tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attr='Esri',
+        name='Satellite',
+        overlay=False,
+        control=True
+    ).add_to(m)
+
+    # Display map in sidebar and get coords
+    map_data = st_folium(m, height=300, use_container_width=True)
+
+    # Handle coords from map
+    if map_data.get("last_clicked"):
+        lat = map_data["last_clicked"]["lat"]
+        lon = map_data["last_clicked"]["lng"]
+    else:
+        lat, lon = 41.5000, -93.5000  # Default for USA Midwest
+
+    st.success(f"Coordinates: {lat:.4f}, {lon:.4f}")
+
+    # Demo dates
     start = st.date_input("Start date", value=date(2017, 4, 1))
     end = st.date_input("End date", value=date(2017, 11, 15))
 
@@ -36,7 +62,7 @@ def load(lat: float, lon: float, start: date, end: date):
 
 try:
     df = load(lat, lon, start, end)
-except Exception as exc:  # network / API errors
+except Exception as exc:  # Network / API errors
     st.error(f"Could not load data: {exc}")
     st.stop()
 

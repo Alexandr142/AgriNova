@@ -9,8 +9,10 @@ Useful collections for farming:
 """
 from __future__ import annotations
 
-import earthaccess
+from pathlib import Path
 from dotenv import load_dotenv
+
+import earthaccess
 
 load_dotenv()
 
@@ -30,6 +32,16 @@ def search_granules(
         count=count,
     )
 
-
 def download(granules, out_dir: str = "data/raw"):
-    return earthaccess.download(granules, out_dir)
+    """Download satellite data."""
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+
+    if not granules:
+        print("No satellite data found.")
+        return []
+
+    files = earthaccess.download(granules, out_dir)
+
+    print(f"Downloaded {len(files)} files")
+
+    return files

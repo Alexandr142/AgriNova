@@ -19,6 +19,7 @@ BASE_URL = "https://power.larc.nasa.gov/api/temporal/daily/point"
 DEFAULT_PARAMETERS = [
     "PRECTOTCORR",
     "T2M",
+    "TS_MAX",
     "T2M_MAX",
     "T2M_MIN",
     "RH2M",

@@ -12,6 +12,7 @@ from streamlit_folium import st_folium
 from agri_nova.data.crop_data import fetch_crop_history, analyze_exhaustion
 from agri_nova.data.power import fetch_daily
 from agri_nova.data.terrain import calculate_slope_gradient
+from agri_nova.data.evapotranspiration import plot_evaporative_stress
 from agri_nova.indicators import add_indicators
 from agri_nova.rotations import StrategyAssessment, assess_from_frame, RADAR_CATEGORIES, TerrainProfile, CROP_DATABASE
 
@@ -97,6 +98,17 @@ def execute_pipeline(lat, lon, start, end):
     crop_history = fetch_crop_history(lat, lon)
     soil_analysis = analyze_exhaustion(crop_history, CROP_DATABASE)
 
+    # 4. Fetch ecostress (NASA ECOSTRESS)
+    # try:
+    #     eco_df = fetch_ecostress(lat, lon, start, end)
+    #     if not eco_df.empty:
+    #         processed_df = processed_df.join(eco_df, how="left")
+    #     else:
+    #         processed_df["ecostress_et"] = None
+    # except Exception as e:
+    #     st.sidebar.warning(f"ECOSTRESS fetch failed: {e}")
+    #     processed_df["ecostress_et"] = None
+
     return processed_df, terrain_data, soil_analysis
 
 
@@ -174,7 +186,10 @@ terrain_profile = TerrainProfile(**terrain_data)
 assessments = assess_from_frame(df, terrain_profile, selected_crop)
 st.plotly_chart(plot_radar_chart(assessments), width="content")
 
-st.header("Climate & Vegetation Context")
+st.markdown("#### Physiological Stress Detection")
+st.plotly_chart(plot_evaporative_stress(df), width="content")
+
+st.header("#### Climate & Vegetation Context")
 
 c_left, c_right = st.columns(2)
 with c_left:

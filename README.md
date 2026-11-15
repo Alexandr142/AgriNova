@@ -63,7 +63,6 @@ This project uses [uv](https://docs.astral.sh/uv/) and [Task](https://taskfile.d
 ```bash
 task setup               # uv sync
 task run                 # Streamlit dashboard
-task test                # pytest
 task prefetch            # cache POWER, terrain, soil, crop history and the regional block
 ```
 

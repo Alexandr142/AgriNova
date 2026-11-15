@@ -1,15 +1,16 @@
 """Run with: uv run streamlit run src/agri_nova/app.py"""
 from datetime import date
 
-import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import folium
 import streamlit as st
 from streamlit_folium import st_folium
 
 from agri_nova.data.power import fetch_daily
+from agri_nova.data.terrain import calculate_slope_gradient
 from agri_nova.indicators import add_indicators
-from agri_nova.rotations import DISCLAIMER, StrategyAssessment, assess_from_frame
+from agri_nova.rotations import DISCLAIMER, StrategyAssessment, assess_from_frame, RADAR_CATEGORIES, TerrainProfile
 
 SIGNAL_LABELS = {
     "reference": ("info", "Reference point"),
@@ -92,35 +93,51 @@ except Exception as exc:  # Network / API errors
     st.stop()
 
 
-def render_assessment(a: StrategyAssessment) -> None:
-    level, label = SIGNAL_LABELS[a.signal]
-    getattr(st, level)(f"**{label}**")
+def plot_radar_chart(assessments: list[StrategyAssessment]):
+    fig = go.Figure()
+    colors = ['#EF553B', '#00CC96', '#AB63FA']
 
-    st.markdown("#### Why this was suggested")
-    st.write(a.why_suggested)
+    for i, strat in enumerate(assessments):
+        fig.add_trace(go.Scatterpolar(
+            r=strat.radar_scores,
+            theta=RADAR_CATEGORIES,
+            fill='toself',
+            name=strat.name,
+            line_color=colors[i % len(colors)]
+        ))
 
-    st.markdown("#### Supporting evidence")
-    for e in a.evidence:
-        icon = "📊" if e.kind == "data" else "📘"
-        st.markdown(f"- {icon} {e.statement}  \n  <sub>{e.source}</sub>", unsafe_allow_html=True)
+    fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 5])))
+    return fig
 
-    st.markdown("#### Potential benefits")
-    for b in a.benefits:
-        st.markdown(f"- {b}")
-
-    st.markdown("#### Information gaps")
-    for g in a.information_gaps:
-        st.markdown(f"- {g}")
-
-    st.markdown("#### Risks needing local expert review")
-    for r in a.expert_review_risks:
-        st.markdown(f"- {r}")
-
-    st.markdown("#### Qualitative profile")
-    cols = st.columns(len(a.ratings))
-    for col, (name, rating) in zip(cols, a.ratings.items(), strict=True):
-        col.metric(name.replace("_", " ").capitalize(), rating.capitalize())
-    st.caption("General-knowledge ratings, not calibrated for Spink County.")
+# def render_assessment(a: StrategyAssessment) -> None:
+#     level, label = SIGNAL_LABELS[a.signal]
+#     getattr(st, level)(f"**{label}**")
+#
+#     st.markdown("#### Why this was suggested")
+#     st.write(a.why_suggested)
+#
+#     st.markdown("#### Supporting evidence")
+#     for e in a.evidence:
+#         icon = "📊" if e.kind == "data" else "📘"
+#         st.markdown(f"- {icon} {e.statement}  \n  <sub>{e.source}</sub>", unsafe_allow_html=True)
+#
+#     st.markdown("#### Potential benefits")
+#     for b in a.benefits:
+#         st.markdown(f"- {b}")
+#
+#     st.markdown("#### Information gaps")
+#     for g in a.information_gaps:
+#         st.markdown(f"- {g}")
+#
+#     st.markdown("#### Risks needing local expert review")
+#     for r in a.expert_review_risks:
+#         st.markdown(f"- {r}")
+#
+#     st.markdown("#### Qualitative profile")
+#     cols = st.columns(len(a.ratings))
+#     for col, (name, rating) in zip(cols, a.ratings.items(), strict=True):
+#         col.metric(name.replace("_", " ").capitalize(), rating.capitalize())
+#     st.caption("General-knowledge ratings, not calibrated for Spink County.")
 
 
 def plot_vulnerability_window(df, profile):
@@ -154,11 +171,10 @@ st.plotly_chart(plot_vulnerability_window(df, CROP_PROFILES[selected_crop]), wid
 st.header("Rotation options")
 st.info(DISCLAIMER)
 
-assessments = assess_from_frame(df)
-tabs = st.tabs([a.name for a in assessments])
-for tab, assessment in zip(tabs, assessments, strict=True):
-    with tab:
-        render_assessment(assessment)
+terrain_data = calculate_slope_gradient(lat, lon)
+terrain_profile = TerrainProfile(**terrain_data)
+assessments = assess_from_frame(df, terrain_profile)
+st.plotly_chart(plot_radar_chart(assessments), width="content")
 
 st.header("Climate context")
 st.plotly_chart(

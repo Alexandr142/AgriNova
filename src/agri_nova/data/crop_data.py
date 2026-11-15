@@ -25,7 +25,6 @@ def fetch_crop_history(lat: float, lon: float, start_year: int = 2019, end_year:
 
                 # USDA API often returns invalid JSON strings inside XML.
                 # Example: <return>{Value:"1",Category:"Corn"}</return>
-                # We use regex to extract the value next to 'Category' directly.
                 match = re.search(r'"?[Cc]ategory"?\s*:\s*"([^"]+)"', resp.text)
 
                 if match:
@@ -44,7 +43,6 @@ def fetch_crop_history(lat: float, lon: float, start_year: int = 2019, end_year:
 
 def analyze_exhaustion(history: list[dict], crop_database: dict) -> dict:
     """
-    Analyzes field history mathematically without hardcoded crop names.
     Calculates monoculture index (max consecutive years) and diversity index.
     """
     valid_crops = [item["crop"] for item in history if item["crop"] not in ("Unknown", "No Data", "API Error")]

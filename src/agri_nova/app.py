@@ -1,16 +1,19 @@
 """Run with: uv run streamlit run src/agri_nova/app.py"""
 from datetime import date
 
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import folium
 import streamlit as st
 from streamlit_folium import st_folium
 
+from agri_nova.data.crop_data import fetch_crop_history, analyze_exhaustion
 from agri_nova.data.power import fetch_daily
 from agri_nova.data.terrain import calculate_slope_gradient
 from agri_nova.indicators import add_indicators
-from agri_nova.rotations import DISCLAIMER, StrategyAssessment, assess_from_frame, RADAR_CATEGORIES, TerrainProfile
+from agri_nova.rotations import StrategyAssessment, assess_from_frame, RADAR_CATEGORIES, TerrainProfile, CROP_DATABASE
 
 SIGNAL_LABELS = {
     "reference": ("info", "Reference point"),
@@ -81,13 +84,24 @@ with st.sidebar:
     end = st.date_input("End date", value=date(2017, 11, 15))
 
 
-@st.cache_data(show_spinner="Fetching NASA POWER data...", ttl=3600)
-def load(lat: float, lon: float, start: date, end: date):
-    return add_indicators(fetch_daily(lat, lon, start, end))
+@st.cache_data(show_spinner="Running Earth Observation Pipeline...", ttl=3600)
+def execute_pipeline(lat, lon, start, end):
+    # 1. Fetch climate (NASA POWER)
+    weather_df = fetch_daily(lat, lon, start, end)
+    processed_df = add_indicators(weather_df)
+
+    # 2. Fetch terrain (SRTM proxy)
+    terrain_data = calculate_slope_gradient(lat, lon)
+
+    # 3. Fetch crop data (CDL)
+    crop_history = fetch_crop_history(lat, lon)
+    soil_analysis = analyze_exhaustion(crop_history, CROP_DATABASE)
+
+    return processed_df, terrain_data, soil_analysis
 
 
 try:
-    df = load(lat, lon, start, end)
+    df, terrain_data, soil_status = execute_pipeline(lat, lon, start, end)
 except Exception as exc:  # Network / API errors
     st.error(f"Could not load data: {exc}")
     st.stop()
@@ -108,36 +122,6 @@ def plot_radar_chart(assessments: list[StrategyAssessment]):
 
     fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 5])))
     return fig
-
-# def render_assessment(a: StrategyAssessment) -> None:
-#     level, label = SIGNAL_LABELS[a.signal]
-#     getattr(st, level)(f"**{label}**")
-#
-#     st.markdown("#### Why this was suggested")
-#     st.write(a.why_suggested)
-#
-#     st.markdown("#### Supporting evidence")
-#     for e in a.evidence:
-#         icon = "📊" if e.kind == "data" else "📘"
-#         st.markdown(f"- {icon} {e.statement}  \n  <sub>{e.source}</sub>", unsafe_allow_html=True)
-#
-#     st.markdown("#### Potential benefits")
-#     for b in a.benefits:
-#         st.markdown(f"- {b}")
-#
-#     st.markdown("#### Information gaps")
-#     for g in a.information_gaps:
-#         st.markdown(f"- {g}")
-#
-#     st.markdown("#### Risks needing local expert review")
-#     for r in a.expert_review_risks:
-#         st.markdown(f"- {r}")
-#
-#     st.markdown("#### Qualitative profile")
-#     cols = st.columns(len(a.ratings))
-#     for col, (name, rating) in zip(cols, a.ratings.items(), strict=True):
-#         col.metric(name.replace("_", " ").capitalize(), rating.capitalize())
-#     st.caption("General-knowledge ratings, not calibrated for Spink County.")
 
 
 def plot_vulnerability_window(df, profile):
@@ -162,31 +146,47 @@ def plot_vulnerability_window(df, profile):
 
 
 c1, c2, c3 = st.columns(3)
-c1.metric("Water-stress days", int(df["water_stress"].sum()))
-c2.metric("Heat-stress days", int(df["heat_stress"].sum()))
-c3.metric("Disease risk (last 7d)", f"{df['disease_risk_7d'].iloc[-1]:.0%}")
+c1.metric("Water-Stress Days", int(df["water_stress"].sum()))
+c2.metric("Heat-Stress Days", int(df["heat_stress"].sum()))
+
+if "disease_risk_7d" in df.columns and not df.empty:
+    c3.metric("Disease Risk (Last 7d)", f"{df['disease_risk_7d'].iloc[-1]:.0%}")
+else:
+    c3.metric("Disease Risk", "N/A")
+
+col_hist, col_diag = st.columns(2)
+with col_hist:
+    st.markdown("#### USDA Satellite Crop History (Last 5 Years)")
+    history_df = pd.DataFrame(soil_status.get("raw_history", []))
+    if not history_df.empty:
+        st.dataframe(history_df, width="content", hide_index=True)
+
+with col_diag:
+    st.markdown("#### Automated Soil Diagnostics")
+    st.write(f"**Detected Baseline Crop:** {soil_status['baseline_crop']}")
+    st.write(f"**Nitrogen Status:** {soil_status['nitrogen_level']}")
+    st.write(f"**Soil Exhaustion Level:** {soil_status['exhaustion_status']}")
 
 st.plotly_chart(plot_vulnerability_window(df, CROP_PROFILES[selected_crop]), width="content")
 
-st.header("Rotation options")
-st.info(DISCLAIMER)
-
-terrain_data = calculate_slope_gradient(lat, lon)
+st.header("Rotation Options Assessment")
 terrain_profile = TerrainProfile(**terrain_data)
-assessments = assess_from_frame(df, terrain_profile)
+assessments = assess_from_frame(df, terrain_profile, selected_crop)
 st.plotly_chart(plot_radar_chart(assessments), width="content")
 
-st.header("Climate context")
-st.plotly_chart(
-    px.bar(df, y="PRECTOTCORR", title="Daily precipitation (mm)"), width="content"
-)
-st.plotly_chart(
-    px.line(df, y="GWETROOT", title="Root-zone soil wetness (0 dry, 1 saturated)"),
-    width="content",
-)
-st.plotly_chart(
-    px.line(df, y=["T2M_MAX", "T2M_MIN"], title="Temperature (C)"), width="content"
-)
+st.header("Climate & Vegetation Context")
 
-with st.expander("Raw data"):
+c_left, c_right = st.columns(2)
+with c_left:
+    st.plotly_chart(
+        px.bar(df, y="PRECTOTCORR", title="Daily Precipitation (mm)"),
+        width="content"
+    )
+with c_right:
+    st.plotly_chart(
+        px.line(df, y="GWETROOT", title="Root-Zone Soil Wetness (0 = Dry, 1 = Saturated)"),
+        width="content"
+    )
+
+with st.expander("Explore Raw Data"):
     st.dataframe(df)

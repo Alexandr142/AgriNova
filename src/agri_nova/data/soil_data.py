@@ -1,13 +1,13 @@
-"""Fetch soil properties from ISRIC SoilGrids to fuse with NASA climate data for better stress modeling."""
+"""ISRIC SoilGrids: global soil texture, used as a fallback when USDA SSURGO has no answer."""
 from __future__ import annotations
 
 import httpx
 
 
-def fetch_soil_profile(lat: float, lon: float) -> dict[str, float | str]:
-    """
-    Fetch sand and clay percentages from ISRIC SoilGrids REST API.
-    Fallback provided if API fails.
+def fetch_soil_profile(lat: float, lon: float) -> dict[str, float | str | bool]:
+    """Sand and clay (%) for 0-15 cm from the SoilGrids REST API.
+
+    Returns ``{"available": False}`` on any failure - no made-up default values.
     """
     url = "https://rest.isric.org/soilgrids/v2.0/properties/query"
     params = {
@@ -15,39 +15,32 @@ def fetch_soil_profile(lat: float, lon: float) -> dict[str, float | str]:
         "lon": lon,
         "property": ["sand", "clay"],
         "depth": "0-15cm",
-        "value": "mean"
+        "value": "mean",
     }
 
     try:
-        resp = httpx.get(url, params=params, timeout=10.0)
+        resp = httpx.get(url, params=params, timeout=15.0)
         resp.raise_for_status()
-        data = resp.json()
+        layers = resp.json().get("properties", {}).get("layers", [])
 
-        layers = data.get("properties", {}).get("layers", [])
-        soil_info = {}
-
+        info: dict[str, float | str | bool] = {}
         for layer in layers:
-            prop_name = layer.get("name")
-            # ISRIC values are multiplied by 10 so divide to get actual percentages
+            name = layer.get("name")
             val = layer.get("depths", [{}])[0].get("values", {}).get("mean")
-            if val is not None:
-                soil_info[prop_name] = val / 10.0
-
+            if name and val is not None:
+                info[name] = val / 10.0  # SoilGrids stores g/kg; /10 gives percent
     except Exception:
-        # Fallback values if API fails
-        soil_info = {"sand": 35.0, "clay": 25.0}
+        return {"available": False}
 
-    # Derive agronomic insight
-    sand = soil_info.get("sand", 0)
-    clay = soil_info.get("clay", 0)
+    if "sand" not in info or "clay" not in info:
+        return {"available": False}
 
+    sand, clay = float(info["sand"]), float(info["clay"])
     if sand > 60:
-        drainage_status = "High drainage (low retention, high drought risk)"
+        profile = "High drainage (low retention, high drought risk)"
     elif clay > 40:
-        drainage_status = "Poor drainage (high runoff risk)"
+        profile = "Poor drainage (high runoff risk)"
     else:
-        drainage_status = "Well-balanced ground drainage"
+        profile = "Well-balanced ground drainage"
 
-    soil_info["profile_type"] = drainage_status
-
-    return soil_info
+    return {"available": True, "sand": sand, "clay": clay, "profile_type": profile, "source": "ISRIC SoilGrids"}

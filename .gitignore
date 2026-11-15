@@ -3,7 +3,12 @@
 __pycache__/
 .env
 data/raw/
-data/processed/
 .ipynb_checkpoints/
 .ruff_cache/
 .pytest_cache/
+
+# Cache: ignore everything except the default Spink County demo files, so a fresh clone runs offline.
+# Generate them with `task prefetch`.
+data/processed/*
+!data/processed/power_44.88_-98.52_20120101_20221231.csv
+!data/processed/site_44.8800_-98.5200.json

@@ -11,11 +11,13 @@ import httpx
 import numpy as np
 import pandas as pd
 
+from agri_nova.paths import CACHE_DIR
+
 BASE_URL = "https://power.larc.nasa.gov/api/temporal/daily/point"
 
 # PRECTOTCORR: precipitation (mm/day)   T2M / T2M_MAX / T2M_MIN: temperature (C)
 # RH2M: relative humidity (%)           ALLSKY_SFC_SW_DWN: solar radiation (kWh/m2/day)
-# GWETROOT: root-zone soil wetness (0-1)
+# GWETROOT: root-zone soil wetness (0-1)   TS_MAX: max earth skin temperature (C)
 DEFAULT_PARAMETERS = [
     "PRECTOTCORR",
     "T2M",
@@ -46,7 +48,7 @@ def fetch_daily(
         "format": "JSON",
         "time-standard": "UTC"
     }
-    resp = httpx.get(BASE_URL, params=params, timeout=60)
+    resp = httpx.get(BASE_URL, params=params, timeout=120)
     resp.raise_for_status()
     data = resp.json()["properties"]["parameter"]
 
@@ -54,3 +56,20 @@ def fetch_daily(
     df.index = pd.to_datetime(df.index, format="%Y%m%d")
     df.index.name = "date"
     return df.replace(-999, np.nan)  # POWER uses -999 for missing values
+
+
+def fetch_daily_cached(lat: float, lon: float, start: date, end: date) -> pd.DataFrame:
+    """Like ``fetch_daily`` but keeps a CSV copy so the demo survives flaky Wi-Fi.
+
+    POWER's grid is 0.5 degrees, so rounding the coordinates to 2 decimals in the cache key
+    loses nothing. A cached copy is always preferred; delete the CSV in data/processed to refresh.
+    """
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    path = CACHE_DIR / f"power_{lat:.2f}_{lon:.2f}_{start:%Y%m%d}_{end:%Y%m%d}.csv"
+
+    if path.exists():
+        return pd.read_csv(path, index_col="date", parse_dates=True)
+
+    df = fetch_daily(lat, lon, start, end)
+    df.to_csv(path)
+    return df

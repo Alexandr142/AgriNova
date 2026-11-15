@@ -15,3 +15,8 @@ tasks:
     desc: Run unit tests
     cmds:
       - uv run pytest
+
+  prefetch:
+    desc: Pre-download POWER, soil, terrain, crop history and the regional block into data/processed (run before a demo)
+    cmds:
+      - uv run python -m agri_nova.prefetch --region

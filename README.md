@@ -4,7 +4,7 @@
 
 ## 📖 Project Overview
 
-Farmers in the American Midwest and Northern Plains are increasingly facing **flash droughts**—rapid-onset environmental events where spiking temperatures and dry winds quickly strip moisture from the topsoil. During these events, traditional crop rotations (like continuous corn and soybeans) suffer severe heat stress and pollination failure. 
+Farmers in the American Midwest and Northern Plains are increasingly facing **flash droughts**—rapid-onset environmental events where spiking temperatures and dry winds quickly strip moisture from the topsoil. During these events, traditional crop rotations (like continuous corn and soybeans) suffer severe heat stress and pollination failure.
 
 **The "Flash Drought" Pivot** is a decision-support dashboard designed to help farmers adapt to these rapid evapotranspiration events. By fusing NASA Earth observations with hyper-local USDA agricultural data, this tool visualizes field-level vulnerabilities and evaluates drought-resilient crop rotation strategies, explicitly acting as a supportive aid for farmer judgment.
 
@@ -59,14 +59,15 @@ The project is built in a two-phase pipeline to balance complex Statistical Infe
 
 ## 🚀 Local Setup & Installation
 
-*(Coming soon: Instructions on how to clone this repository, install the `requirements.txt`, and launch the Streamlit app locally during the hackathon.)*
+This project uses [Task](https://taskfile.dev) to manage development commands.
 
 ```bash
-# Example setup (To be updated)
-git clone https://github.com/yourusername/field-shift-flash-drought.git
-cd field-shift-flash-drought
-uv sync
-uv run streamlit run src/agri_nova/app.py
-uv run pytest
-uv run ruff check .
+# Install dependencies
+task setup
+
+# Run the dashboard
+task run
+
+# Run tests
+task test
 ```

@@ -1,0 +1,17 @@
+version: '3'
+
+tasks:
+  setup:
+    desc: Install dependencies using uv
+    cmds:
+      - uv sync
+
+  run:
+    desc: Run the Streamlit dashboard
+    cmds:
+      - uv run streamlit run src/agri_nova/app.py
+
+  test:
+    desc: Run unit tests
+    cmds:
+      - uv run pytest
